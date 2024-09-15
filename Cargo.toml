@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [ 
-  "crates/libs/proxy",
+  "crates/libs/yarrp",
   "crates/samples/tonic_test",
 ]
 
@@ -31,7 +31,7 @@ tonic-build = "0.12"
 prost-build = "0.13"
 http = "*"
 # libs in this repo
-proxy = {path = "./crates/libs/proxy"}
+yarrp = {path = "./crates/libs/yarrp"}
 
 [patch.crates-io]
 # cng uses this dep without version so we use it same for it to compile

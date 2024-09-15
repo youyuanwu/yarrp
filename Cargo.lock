@@ -99,7 +99,7 @@ dependencies = [
  "rustversion",
  "serde",
  "sync_wrapper 1.0.1",
- "tower 0.4.13",
+ "tower",
  "tower-layer",
  "tower-service",
 ]
@@ -622,7 +622,7 @@ dependencies = [
  "pin-project-lite",
  "socket2",
  "tokio",
- "tower 0.4.13",
+ "tower",
  "tower-service",
  "tracing",
 ]
@@ -983,30 +983,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60caa6738c7369b940c3d49246a8d1749323674c65cb13010134f5c9bad5b519"
 dependencies = [
  "prost",
-]
-
-[[package]]
-name = "proxy"
-version = "0.1.0"
-dependencies = [
- "async-stream",
- "cfg-if",
- "futures",
- "hex",
- "http",
- "http-body-util",
- "hyper",
- "hyper-util",
- "rustls",
- "rustls-cng",
- "rustls-symcrypt",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tokio-util",
- "tower 0.5.1",
- "trait-variant",
- "uds_windows",
 ]
 
 [[package]]
@@ -1520,7 +1496,7 @@ dependencies = [
  "socket2",
  "tokio",
  "tokio-stream",
- "tower 0.4.13",
+ "tower",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -1545,12 +1521,12 @@ version = "0.1.0"
 dependencies = [
  "hyper-util",
  "prost",
- "proxy",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "tonic",
  "tonic-build",
+ "yarrp",
 ]
 
 [[package]]
@@ -1574,16 +1550,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tower"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
-dependencies = [
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
 name = "tower-layer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1601,6 +1567,7 @@ version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -1834,6 +1801,30 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "rustix",
+]
+
+[[package]]
+name = "yarrp"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "cfg-if",
+ "futures",
+ "hex",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "rustls",
+ "rustls-cng",
+ "rustls-symcrypt",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "trait-variant",
+ "uds_windows",
 ]
 
 [[package]]
