@@ -1,12 +1,9 @@
-// crate is only enabled on windows
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "windows")] {
 mod proxy;
 pub use proxy::*;
 
-pub mod conn;
+// TODO: remove
 pub mod test_util;
-pub mod uds_service;
-pub mod acceptor;
-    }
-}
+
+pub mod accept_stream;
+pub mod connector;
+pub mod proxy_service;

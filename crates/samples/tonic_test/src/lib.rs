@@ -4,7 +4,7 @@ tonic::include_proto!("helloworld"); // The string specified here must match the
 mod tests {
     use std::{net::SocketAddr, time::Duration};
 
-    use proxy::{conn::TcpConnector, CancellationToken};
+    use proxy::{connector::TcpConnector, CancellationToken};
     use tokio::net::TcpListener;
     use tonic::transport::Server;
 
@@ -57,7 +57,7 @@ mod tests {
                 let incoming = TcpListener::bind(&addr).await.unwrap();
                 let stream = tokio_stream::wrappers::TcpListenerStream::new(incoming);
                 let conn = TcpConnector::new("[::1]:50051".parse().unwrap()); // tonic addr
-                let service = proxy::uds_service::ProxyService::new(conn).await;
+                let service = proxy::proxy_service::ProxyService::new(conn).await;
                 proxy::serve_with_incoming(stream, service, async move {
                     sv_token_cp2.cancelled().await
                 })

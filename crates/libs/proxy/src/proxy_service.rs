@@ -39,10 +39,12 @@ where
     }
 }
 
+/// Makes the http client that poxy request to.
 async fn make_client<R: hyper::body::Body + Send, C: Connect + Clone>(conn: C) -> Client<C, R>
 where
     <R as hyper::body::Body>::Data: Send,
 {
+    // TODO: write a hyper client directly and replace legacy client.
     hyper_util::client::legacy::Builder::new(hyper_util::rt::TokioExecutor::new())
         .pool_idle_timeout(std::time::Duration::from_secs(3))
         .pool_timer(hyper_util::rt::TokioTimer::new())

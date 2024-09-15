@@ -2,8 +2,9 @@
 
 use std::{future::Future, net::SocketAddr, sync::Arc};
 
-use crate::uds_service::ProxyService;
-use crate::{acceptor::RustlsAcceptStream, conn::UdsConnector};
+use crate::accept_stream::RustlsAcceptStream;
+use crate::connector::UdsConnector;
+use crate::proxy_service::ProxyService;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpListener,
@@ -55,6 +56,7 @@ pub async fn serve_proxy_tcp(
     Ok(())
 }
 
+// TODO: support other http body for service.
 pub async fn serve_with_incoming<I, IO, IE, S, F>(
     mut incoming: I,
     svc: S,

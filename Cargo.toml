@@ -18,7 +18,7 @@ hyper = {version = "1", features= ["client"]}
 hyper-util = { version = "*",  default-features = false, features = ["server-auto", "tokio", "client-legacy"] }
 http-body-util = "*"
 tower = "*"
-hyperlocal-with-windows = "*"
+# hyperlocal-with-windows = "*"
 tokio-util = "*"
 cfg-if = "1.0"
 trait-variant = "0.1"

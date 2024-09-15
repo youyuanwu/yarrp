@@ -1,7 +1,3 @@
-// pub trait Stream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin {}
-
-// TODO: these abstraction might not workout
-
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -32,7 +28,7 @@ impl RustlsAcceptStream {
 impl Stream for RustlsAcceptStream {
     type Item = std::io::Result<tokio_rustls::server::TlsStream<TcpStream>>;
 
-    // This is not efficient since tls and accept does not happen in parallel
+    // TODO: This is not efficient since tls and accept does not happen in parallel
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // if has pending slot poll it.
         if let Some(f) = self.fu.as_mut() {
