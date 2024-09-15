@@ -1,29 +1,36 @@
 use hyper::body::Incoming;
-use hyper_util::client::legacy::{Client, ResponseFuture};
+use hyper_util::client::legacy::{connect::Connect, Client, ResponseFuture};
 
-use crate::conn::UdsConnector;
 use tower::Service;
 
 // Proxy hyper service for uds.
 // Pipes all hyper requests into the uds client
 #[derive(Debug, Clone)]
-pub struct UdsService {
-    c: Client<UdsConnector, Incoming>,
+pub struct ProxyService<C>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+{
+    c: Client<C, Incoming>,
 }
 
-impl UdsService {
-    pub async fn new(conn: UdsConnector) -> Self {
+impl<C> ProxyService<C>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+{
+    pub async fn new(conn: C) -> Self {
         Self {
             c: make_client(conn).await,
         }
     }
 }
 
-impl hyper::service::Service<hyper::Request<Incoming>> for UdsService {
+impl<C> hyper::service::Service<hyper::Request<Incoming>> for ProxyService<C>
+where
+    C: Connect + Clone + Send + Sync + 'static,
+{
     type Response = hyper::Response<Incoming>;
 
     type Error = hyper_util::client::legacy::Error;
-
     type Future = ResponseFuture;
 
     fn call(&self, req: hyper::Request<Incoming>) -> Self::Future {
@@ -32,7 +39,7 @@ impl hyper::service::Service<hyper::Request<Incoming>> for UdsService {
     }
 }
 
-async fn make_client<R: hyper::body::Body + Send>(conn: UdsConnector) -> Client<UdsConnector, R>
+async fn make_client<R: hyper::body::Body + Send, C: Connect + Clone>(conn: C) -> Client<C, R>
 where
     <R as hyper::body::Body>::Data: Send,
 {

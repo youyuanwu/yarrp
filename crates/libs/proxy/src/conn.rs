@@ -1,10 +1,12 @@
 use std::future::Future;
+use std::net::SocketAddr;
 use std::os::windows::io::IntoRawSocket;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{os::windows::io::FromRawSocket, path::PathBuf, sync::Arc};
 
 use hyper::Uri;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioIo;
 // fix connector
 #[derive(Debug, Clone)]
@@ -47,6 +49,55 @@ impl tower::Service<hyper::Uri> for UdsConnector {
     fn call(&mut self, _req: Uri) -> Self::Future {
         let conn = self.clone();
         let fut = async move { conn.connect().await };
+
+        Box::pin(fut)
+    }
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TcpConnector {
+    inner: hyper_util::client::legacy::connect::HttpConnector,
+    addr: SocketAddr,
+}
+
+impl TcpConnector {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self {
+            inner: HttpConnector::new(),
+            addr,
+        }
+    }
+}
+
+impl Unpin for TcpConnector {}
+
+impl tower::Service<hyper::Uri> for TcpConnector {
+    type Response = TokioIo<tokio::net::TcpStream>;
+    type Error = std::io::Error;
+    #[allow(clippy::type_complexity)]
+    type Future =
+        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+
+    fn call(&mut self, req: Uri) -> Self::Future {
+        // fix req to have fixed uri
+        let req_target = http::uri::Builder::from(req)
+            .authority(self.addr.to_string())
+            .build()
+            .unwrap();
+        // .map_err(|e| {
+        //     std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e.to_string())
+        // }).unwrap();
+        let mut conn = self.inner.clone();
+        // let fut = async move { conn. };
+        let fut = async move {
+            conn.call(req_target).await.map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e.to_string())
+            })
+        };
 
         Box::pin(fut)
     }

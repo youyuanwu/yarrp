@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
-members = [ "crates/libs/proxy",
+members = [ 
+  "crates/libs/proxy",
+  "crates/samples/tonic_test",
 ]
 
 [workspace.dependencies]
@@ -20,6 +22,14 @@ hyperlocal-with-windows = "*"
 tokio-util = "*"
 cfg-if = "1.0"
 trait-variant = "0.1"
+tokio-stream = { version = "0.1", features = ["net"]}
+async-stream = { version = "*" }
+futures = "*"
+tonic = "0.12"
+prost = "0.13"
+tonic-build = "0.12"
+prost-build = "0.13"
+http = "*"
 # libs in this repo
 proxy = {path = "./crates/libs/proxy"}
 

@@ -2,54 +2,66 @@
 
 // TODO: these abstraction might not workout
 
-// Acceptor for tls
-#[trait_variant::make(TlsAcceptor: Send)]
-pub trait LocalTlsAcceptor: Clone {
-    async fn accept(
-        &self,
-        stream: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + std::marker::Send,
-    ) -> std::io::Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>;
-}
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
-#[derive(Clone)]
-pub struct RustTlsAcceptor {
+use futures::future::BoxFuture;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_stream::Stream;
+
+type RustlsStream = tokio_rustls::server::TlsStream<TcpStream>;
+
+pub struct RustlsAcceptStream {
+    inner: TcpListener,
     tls: tokio_rustls::TlsAcceptor,
+    fu: Option<BoxFuture<'static, std::io::Result<RustlsStream>>>,
 }
 
-impl TlsAcceptor for RustTlsAcceptor {
-    async fn accept(
-        &self,
-        stream: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + std::marker::Send,
-    ) -> std::io::Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> {
-        self.tls.accept(stream).await
+impl RustlsAcceptStream {
+    pub fn new(tcp: TcpListener, tls: tokio_rustls::TlsAcceptor) -> Self {
+        Self {
+            inner: tcp,
+            tls,
+            fu: None,
+        }
     }
 }
 
-impl RustTlsAcceptor {
-    pub fn new(tls: tokio_rustls::TlsAcceptor) -> Self {
-        Self { tls }
-    }
-}
+impl Stream for RustlsAcceptStream {
+    type Item = std::io::Result<tokio_rustls::server::TlsStream<TcpStream>>;
 
-// tcp or unix acceptor
+    // This is not efficient since tls and accept does not happen in parallel
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // if has pending slot poll it.
+        if let Some(f) = self.fu.as_mut() {
+            let pl = f.as_mut().poll(cx).map(Some);
+            // clean this and next time tcp accept is called.
+            if pl.is_ready() {
+                self.fu.take();
+            }
+            return pl;
+        }
 
-// Acceptor for tls or unix
-#[trait_variant::make(StreamAcceptor: Send)]
-pub trait LocalStreamAcceptor {
-    async fn accept(
-        &self,
-    ) -> std::io::Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send>;
-}
+        // poll tcp and construct next f
+        let tcp_s = self.inner.poll_accept(cx);
+        let s = match tcp_s {
+            Poll::Ready(res) => match res {
+                Ok((s, _)) => s,
+                Err(e) => return Poll::Ready(Some(Err(e))),
+            },
+            Poll::Pending => return Poll::Pending,
+        };
 
-pub struct TcpAccaptor {
-    tcp: tokio::net::TcpListener,
-}
-
-impl StreamAcceptor for TcpAccaptor {
-    async fn accept(
-        &self,
-    ) -> std::io::Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send> {
-        let (stream, _) = self.tcp.accept().await?;
-        Ok(stream)
+        assert!(self.fu.is_none());
+        let tls_cp = self.tls.clone();
+        self.fu = Some(Box::pin(async move { tls_cp.accept(s).await }));
+        let out = self.fu.as_mut().unwrap().as_mut().poll(cx).map(Some);
+        if matches!(out, Poll::Ready(_)) {
+            // clear an prepare next
+            self.fu.take();
+        }
+        out
     }
 }

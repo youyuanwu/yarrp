@@ -1,12 +1,18 @@
 // reference: https://github.com/stefansundin/hyper-reverse-proxy/tree/master
 
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{future::Future, net::SocketAddr, sync::Arc};
 
-use crate::conn::UdsConnector;
-use crate::uds_service::UdsService;
-use tokio::{net::TcpListener, select};
+use crate::uds_service::ProxyService;
+use crate::{acceptor::RustlsAcceptStream, conn::UdsConnector};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpListener,
+};
+use tokio_stream::StreamExt;
 
+pub use std::error::Error as StdError;
 pub use tokio_util::sync::CancellationToken;
+pub type Error = Box<dyn StdError + Send + Sync>;
 
 /// Serves the proxy on the addr
 pub async fn serve_proxy(
@@ -25,30 +31,74 @@ pub async fn serve_proxy(
 
     let test_socket = crate::test_util::get_test_socket_path();
     let conn = UdsConnector::new(test_socket);
-    let service = UdsService::new(conn).await;
-    loop {
-        let svc_cp = service.clone();
+    let service = ProxyService::new(conn).await;
 
-        let (tcp_stream, _remote_addr) = select! {
-            x = incoming.accept() => { x?}
-            _ = token.cancelled() => {
-                println!("proxy cancelled");
+    let rustls_accept_stream = RustlsAcceptStream::new(incoming, tls_acceptor);
+
+    serve_with_incoming(rustls_accept_stream, service, async move {
+        token.cancelled().await
+    })
+    .await?;
+    Ok(())
+}
+
+pub async fn serve_proxy_tcp(
+    addr: SocketAddr,
+    token: CancellationToken,
+) -> Result<(), crate::Error> {
+    let incoming = TcpListener::bind(&addr).await?;
+    let stream = tokio_stream::wrappers::TcpListenerStream::new(incoming);
+    let test_socket = crate::test_util::get_test_socket_path();
+    let conn = UdsConnector::new(test_socket);
+    let service = ProxyService::new(conn).await;
+    serve_with_incoming(stream, service, async move { token.cancelled().await }).await?;
+    Ok(())
+}
+
+pub async fn serve_with_incoming<I, IO, IE, S, F>(
+    mut incoming: I,
+    svc: S,
+    signal: F,
+) -> Result<(), crate::Error>
+where
+    I: tokio_stream::Stream<Item = Result<IO, IE>> + Unpin,
+    IO: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    IE: Into<crate::Error>,
+    S: hyper::service::Service<
+            hyper::Request<hyper::body::Incoming>,
+            Response = hyper::Response<hyper::body::Incoming>,
+            Error: Into<crate::Error>,
+        >
+        + Send
+        + 'static
+        + Clone,
+    S::Future: 'static + Send,
+    F: Future<Output = ()>,
+{
+    let mut sig = std::pin::pin!(signal);
+    loop {
+        // get the next stream to run http on
+        let inc_stream = tokio::select! {
+            res = incoming.next() => {
+                match res {
+                    Some(s) => s.map_err(|e| e.into())?,
+                    None => {
+                        println!("incoming ended");
+                        return Ok(());
+                    }
+                }
+            }
+            _ = &mut sig =>{
+                println!("cancellation triggered");
                 break Ok(());
             }
         };
 
-        let tls_acceptor = tls_acceptor.clone();
+        let svc_cp = svc.clone();
         tokio::spawn(async move {
-            let tls_stream = match tls_acceptor.accept(tcp_stream).await {
-                Ok(tls_stream) => tls_stream,
-                Err(err) => {
-                    eprintln!("failed to perform tls handshake: {err:#}");
-                    return;
-                }
-            };
             if let Err(err) =
                 hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
-                    .serve_connection(hyper_util::rt::TokioIo::new(tls_stream), svc_cp)
+                    .serve_connection(hyper_util::rt::TokioIo::new(inc_stream), svc_cp)
                     .await
             {
                 if let Some(e) = err.downcast_ref::<hyper::Error>() {
@@ -68,73 +118,5 @@ pub async fn serve_proxy(
                 }
             }
         });
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use tokio_util::sync::CancellationToken;
-
-    use crate::serve_proxy;
-
-    #[tokio::test]
-    async fn e2e_test() {
-        // open cpp server
-        let curr_dir = std::env::current_dir().unwrap();
-        println!("{:?}", curr_dir);
-        let root_dir = curr_dir
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap();
-        let server_exe = root_dir.join("build/examples/helloworld/Debug/greeter_server.exe");
-        println!("launching {:?}", server_exe);
-        let mut child_server = std::process::Command::new(server_exe.as_path())
-            .spawn()
-            .expect("Couldn't run server");
-
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-        let token = CancellationToken::new();
-        let token_cp = token.clone();
-        // open proxy
-        let proxy_child = tokio::spawn(async {
-            let addr = "127.0.0.1:5047";
-            println!("start proxy at {addr}");
-            serve_proxy(addr.parse().unwrap(), token_cp).await.unwrap();
-        });
-
-        // proxy server might be slow to come up.
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-        // send csharp request to server
-        println!("launching csharp client");
-        let mut child_client = std::process::Command::new("dotnet.exe")
-            .current_dir(root_dir)
-            .args([
-                "run",
-                "--project",
-                "./src/greeter_client/greeter_client.csproj",
-            ])
-            .spawn()
-            .expect("Couldn't run client");
-
-        tokio::task::spawn_blocking(move || {
-            child_client.wait().expect("client failed");
-        })
-        .await
-        .unwrap();
-
-        // stop proxy
-        token.cancel();
-        proxy_child.await.unwrap();
-
-        // stop cpp server
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        child_server.kill().expect("!kill");
-        child_server.wait().unwrap();
     }
 }
