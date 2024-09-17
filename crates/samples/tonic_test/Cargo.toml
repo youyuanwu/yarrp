@@ -11,6 +11,8 @@ tokio.workspace = true
 tokio-util.workspace = true
 tokio-stream.workspace = true
 hyper-util.workspace = true
+tower.workspace = true
+hyperlocal-with-windows.workspace = true # remove file
 
 [build-dependencies]
 tonic-build.workspace = true

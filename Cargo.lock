@@ -628,6 +628,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperlocal-with-windows"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "698c6386888e0ed951c1f5970dd9ac61cf2682b006aa0c8d7f36e6952d28bb40"
+dependencies = [
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "pin-project-lite",
+ "tokio",
+ "tower-service",
+ "uds_windows",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1108,7 +1124,7 @@ dependencies = [
 [[package]]
 name = "rustls"
 version = "0.23.13"
-source = "git+https://github.com/rustls/rustls.git#641e26eeb26ed6b44a6c07ca272cafde69de9004"
+source = "git+https://github.com/rustls/rustls.git#bfb766554929c92fd90c59ab1ffa30523b8ddb83"
 dependencies = [
  "once_cell",
  "ring",
@@ -1520,12 +1536,14 @@ name = "tonic_test"
 version = "0.1.0"
 dependencies = [
  "hyper-util",
+ "hyperlocal-with-windows",
  "prost",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "tonic",
  "tonic-build",
+ "tower",
  "yarrp",
 ]
 
