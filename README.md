@@ -3,6 +3,12 @@ Yet another Rust Reverse Proxy
 
 WIP
 
+## Dependency
+```ps1
+# powershell7
+winget install Microsoft.PowerShell
+```
+
 ## Build
 On windows:
 ```ps1

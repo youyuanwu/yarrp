@@ -2,6 +2,7 @@ use std::path::Path;
 
 use tonic::transport::{Channel, Endpoint, Error};
 use yarrp::connector::UdsConnector;
+pub mod rustls_client;
 
 tonic::include_proto!("helloworld"); // The string specified here must match the proto package name
 
@@ -22,8 +23,9 @@ pub async fn connect_uds_channel<P: AsRef<Path>>(path: P) -> Result<Channel, Err
 
 #[cfg(test)]
 mod tests {
-    use std::{future::Future, net::SocketAddr, time::Duration};
+    use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
 
+    use hyper_util::rt::TokioIo;
     use tokio::{
         io::{AsyncRead, AsyncWrite},
         net::TcpListener,
@@ -65,12 +67,12 @@ mod tests {
     }
 
     // returns the listener stream and its local addr from os.
-    async fn get_tonic_server_stream() -> (TcpListenerStream, SocketAddr) {
+    async fn create_listener_server() -> (TcpListener, SocketAddr) {
         let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
         let local_addr = listener.local_addr().unwrap();
-        let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        (stream, local_addr)
+        // let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
+        (listener, local_addr)
     }
 
     #[tokio::test]
@@ -90,13 +92,18 @@ mod tests {
             tokio_stream::wrappers::TcpListenerStream::new(incoming)
         };
 
-        let (sv_incoming, sv_addr) = get_tonic_server_stream().await;
+        let (sv_l, sv_addr) = create_listener_server().await;
 
-        basic_test_case(client_channel, proxy_incoming, sv_incoming, sv_addr).await;
+        basic_test_case(
+            client_channel,
+            proxy_incoming,
+            TcpListenerStream::new(sv_l),
+            sv_addr,
+        )
+        .await;
     }
 
     #[tokio::test]
-    // #[ignore = "UDS spawn blocking will not terminate."]
     async fn basic_uds_proxy_test() {
         // proxy server runs on uds
         let test_socket = std::env::temp_dir().join("mytest.sock");
@@ -112,15 +119,59 @@ mod tests {
         };
 
         let test_socket_cp = test_socket.clone();
-        let proxy_incoming = async {
-            // let l = yarrp::accept_stream::UnixListener::bind(test_socket_cp).unwrap();
-            // yarrp::accept_stream::make_uds_accept_stream(l).unwrap()
-            yarrp::accept_stream::UdsAcceptStream::bind(test_socket_cp).unwrap()
+        let proxy_incoming =
+            async { yarrp::accept_stream::UdsAcceptStream::bind(test_socket_cp).unwrap() };
+
+        let (sv_l, sv_addr) = create_listener_server().await;
+
+        basic_test_case(
+            client_channel,
+            proxy_incoming,
+            TcpListenerStream::new(sv_l),
+            sv_addr,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn basic_rustls_proxy_test() {
+        // Create proxy server stream
+        let (proxy_l, proxy_addr) = create_listener_server().await;
+        // Build TLS configuration.
+        let (mut server_config, certs) = yarrp::test_util::load_test_server_config();
+        server_config.alpn_protocols = vec![b"h2".to_vec()]; // b"http/1.1".to_vec(), b"http/1.0".to_vec()
+        let tls_acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+        let proxy_incoming =
+            async { yarrp::accept_stream::RustlsAcceptStream::new(proxy_l, tls_acceptor) };
+
+        let client_channel = async {
+            // create client channel that connects via rustls
+            Endpoint::try_from("http://[::]:50051")
+                .unwrap()
+                .connect_with_connector(tower::service_fn(move |_| {
+                    let certs_cp = certs.clone();
+                    let proxy_addr_cp = proxy_addr;
+                    async move {
+                        // Connect to tls proxy
+                        crate::rustls_client::get_client_stream(certs_cp, proxy_addr_cp)
+                            .await
+                            .map(|s| TokioIo::new(s))
+                    }
+                }))
+                .await
+                .unwrap()
         };
 
-        let (sv_incoming, sv_addr) = get_tonic_server_stream().await;
+        // tonic server
+        let (sv_l, sv_addr) = create_listener_server().await;
 
-        basic_test_case(client_channel, proxy_incoming, sv_incoming, sv_addr).await;
+        basic_test_case(
+            client_channel,
+            proxy_incoming,
+            TcpListenerStream::new(sv_l),
+            sv_addr,
+        )
+        .await;
     }
 
     async fn basic_test_case<I, IO, IE>(

@@ -13,6 +13,9 @@ tokio-stream.workspace = true
 hyper-util.workspace = true
 tower.workspace = true
 hyperlocal-with-windows.workspace = true # remove file
+tokio-rustls.workspace = true
+rustls-cng.workspace = true
+rustls-symcrypt.workspace = true
 
 [build-dependencies]
 tonic-build.workspace = true
