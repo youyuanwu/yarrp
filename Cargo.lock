@@ -1548,6 +1548,7 @@ dependencies = [
  "tonic-build",
  "tower",
  "yarrp",
+ "yarrp-rustls",
 ]
 
 [[package]]
@@ -1828,24 +1829,33 @@ dependencies = [
 name = "yarrp"
 version = "0.1.0"
 dependencies = [
- "async-stream",
  "cfg-if",
  "futures",
- "hex",
  "http",
  "http-body-util",
  "hyper",
  "hyper-util",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "trait-variant",
+ "uds_windows",
+]
+
+[[package]]
+name = "yarrp-rustls"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hex",
  "rustls",
  "rustls-cng",
  "rustls-symcrypt",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tokio-util",
- "tower",
- "trait-variant",
- "uds_windows",
+ "yarrp",
 ]
 
 [[package]]

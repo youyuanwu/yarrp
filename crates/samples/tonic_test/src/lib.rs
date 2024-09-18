@@ -138,11 +138,11 @@ mod tests {
         // Create proxy server stream
         let (proxy_l, proxy_addr) = create_listener_server().await;
         // Build TLS configuration.
-        let (mut server_config, certs) = yarrp::test_util::load_test_server_config();
+        let (mut server_config, certs) = yarrp_rustls::test_util::load_test_server_config();
         server_config.alpn_protocols = vec![b"h2".to_vec()]; // b"http/1.1".to_vec(), b"http/1.0".to_vec()
         let tls_acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
         let proxy_incoming =
-            async { yarrp::accept_stream::RustlsAcceptStream::new(proxy_l, tls_acceptor) };
+            async { yarrp_rustls::accept_stream::RustlsAcceptStream::new(proxy_l, tls_acceptor) };
 
         let client_channel = async {
             // create client channel that connects via rustls

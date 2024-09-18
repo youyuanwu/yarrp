@@ -1,0 +1,15 @@
+[package]
+name = "yarrp-rustls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustls-cng.workspace = true
+rustls.workspace = true
+rustls-symcrypt.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+tokio-stream.workspace = true
+hex.workspace = true
+yarrp.workspace = true

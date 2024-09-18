@@ -7,13 +7,14 @@ use tokio_rustls::{
     TlsConnector,
 };
 
+// TODO: refactor into the yarrp-rustls crate
 pub async fn get_client_stream(
-    certs: Vec<CertContext>,
+    root_certs: Vec<CertContext>,
     sv_addr: SocketAddr,
 ) -> std::io::Result<tokio_rustls::client::TlsStream<tokio::net::TcpStream>> {
     let mut root_store = RootCertStore::empty();
     root_store
-        .add(certs.first().unwrap().as_der().into())
+        .add(root_certs.first().unwrap().as_der().into())
         .unwrap();
     let client_config =
         ClientConfig::builder_with_provider(Arc::new(rustls_symcrypt::default_symcrypt_provider()))
