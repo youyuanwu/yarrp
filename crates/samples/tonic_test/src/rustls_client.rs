@@ -6,8 +6,11 @@ use tokio_rustls::{
     rustls::{ClientConfig, RootCertStore},
     TlsConnector,
 };
+use yarrp_rustls::cng::ClientCertResolver;
 
 // TODO: refactor into the yarrp-rustls crate
+/// Create client tls stream, uses the certs as both root and client cert.
+/// i.e. configures mutual auth with selfsigned cert.
 pub async fn get_client_stream(
     root_certs: Vec<CertContext>,
     sv_addr: SocketAddr,
@@ -16,12 +19,13 @@ pub async fn get_client_stream(
     root_store
         .add(root_certs.first().unwrap().as_der().into())
         .unwrap();
+    let client_cert = ClientCertResolver::try_from_certs(root_certs).unwrap();
     let client_config =
         ClientConfig::builder_with_provider(Arc::new(rustls_symcrypt::default_symcrypt_provider()))
             .with_safe_default_protocol_versions()
             .unwrap()
             .with_root_certificates(root_store)
-            .with_no_client_auth();
+            .with_client_cert_resolver(Arc::new(client_cert));
 
     let connector = TlsConnector::from(Arc::new(client_config));
     let stream = TcpStream::connect(&sv_addr).await.unwrap();

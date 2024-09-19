@@ -17,10 +17,19 @@ pub fn load_test_server_config() -> (rustls::ServerConfig, Vec<CertContext>) {
     let contexts_copy = certs.clone();
     let cert_resolver = crate::cng::ServerCertResolver::try_from_certs(certs).unwrap();
 
-    let config = rustls::ServerConfig::builder_with_provider(Arc::new(default_symcrypt_provider()))
+    let prov = Arc::new(default_symcrypt_provider());
+
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add_parsable_certificates(cert_resolver.get_certs());
+    let verifier =
+        rustls::server::WebPkiClientVerifier::builder_with_provider(roots.into(), prov.clone())
+            .build()
+            .unwrap();
+
+    let config = rustls::ServerConfig::builder_with_provider(prov)
         .with_safe_default_protocol_versions()
         .unwrap()
-        .with_no_client_auth()
+        .with_client_cert_verifier(verifier)
         .with_cert_resolver(Arc::new(cert_resolver));
     (config, contexts_copy)
 }

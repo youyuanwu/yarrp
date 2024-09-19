@@ -38,7 +38,15 @@ where
         let inc_stream = tokio::select! {
             res = incoming.next() => {
                 match res {
-                    Some(s) => s.map_err(|e| e.into())?,
+                    Some(s) => {
+                        match s{
+                            Ok(ss) => ss,
+                            Err(e) => {
+                                println!("incoming has error, skip. {:?}", e.into());
+                                continue;
+                            },
+                        }
+                    },
                     None => {
                         println!("incoming ended");
                         return Ok(());
