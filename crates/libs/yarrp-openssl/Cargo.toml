@@ -1,0 +1,11 @@
+[package]
+name = "yarrp-openssl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openssl.workspace = true
+tokio-openssl.workspace = true
+tokio.workspace = true
+futures.workspace = true
+yarrp.workspace = true

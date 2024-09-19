@@ -1,0 +1,17 @@
+[package]
+name = "tonic_openssl_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio.workspace = true
+tonic.workspace = true
+prost.workspace = true
+tower.workspace = true
+hyper-util.workspace = true
+tonic_test.workspace = true
+# openssl stuff
+openssl.workspace = true
+yarrp-openssl.workspace = true
+# self
+yarrp.workspace = true

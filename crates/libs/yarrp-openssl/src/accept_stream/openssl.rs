@@ -1,35 +1,34 @@
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::{pin::Pin, task::Poll};
 
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, Stream};
+use openssl::ssl::Ssl;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_stream::Stream;
 
-type RustlsStream = tokio_rustls::server::TlsStream<TcpStream>;
+type OpensslStream = tokio_openssl::SslStream<TcpStream>;
 
-pub struct RustlsAcceptStream {
+pub struct OpensslAcceptStream {
     inner: TcpListener,
-    tls: tokio_rustls::TlsAcceptor,
-    fu: Option<BoxFuture<'static, Result<RustlsStream, crate::Error>>>,
+    tls: openssl::ssl::SslAcceptor,
+    fu: Option<BoxFuture<'static, Result<OpensslStream, crate::Error>>>,
 }
 
-impl RustlsAcceptStream {
-    pub fn new(tcp: TcpListener, tls: tokio_rustls::TlsAcceptor) -> Self {
+impl OpensslAcceptStream {
+    pub fn new(inner: TcpListener, tls: openssl::ssl::SslAcceptor) -> Self {
         Self {
-            inner: tcp,
+            inner,
             tls,
             fu: None,
         }
     }
 }
 
-impl Stream for RustlsAcceptStream {
-    type Item = Result<tokio_rustls::server::TlsStream<TcpStream>, crate::Error>;
+impl Stream for OpensslAcceptStream {
+    type Item = Result<OpensslStream, crate::Error>;
 
-    // TODO: This is not efficient since tls and accept does not happen in parallel
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
         // if has pending slot poll it.
         if let Some(f) = self.fu.as_mut() {
             let pl = f.as_mut().poll(cx).map(Some);
@@ -49,12 +48,17 @@ impl Stream for RustlsAcceptStream {
             },
             Poll::Pending => return Poll::Pending,
         };
-
-        assert!(self.fu.is_none());
         let tls_cp = self.tls.clone();
-        self.fu = Some(Box::pin(async move {
-            tls_cp.accept(s).await.map_err(|e| e.into())
-        }));
+        let fu = async move {
+            let ssl = Ssl::new(tls_cp.context())?;
+            let mut stream = tokio_openssl::SslStream::new(ssl, s).map_err(crate::Error::from)?;
+            Pin::new(&mut stream)
+                .accept()
+                .await
+                .map_err(crate::Error::from)?;
+            Ok(stream)
+        };
+        self.fu = Some(Box::pin(fu));
         let out = self.fu.as_mut().unwrap().as_mut().poll(cx).map(Some);
         if matches!(out, Poll::Ready(_)) {
             // clear an prepare next

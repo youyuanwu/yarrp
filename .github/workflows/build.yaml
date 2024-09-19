@@ -19,6 +19,14 @@ jobs:
     - name: Get specific version CMake
       uses: lukka/get-cmake@v3.25.1
 
+    - name: Get vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: dd3adcf020e69077e83e92a0a293ceca734f6288
+
+    - name: vcpkg install
+      run: vcpkg install openssl:x64-windows-static-md
+
     - name: Install rust stable
       uses: dtolnay/rust-toolchain@stable
       with:

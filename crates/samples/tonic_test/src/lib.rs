@@ -1,7 +1,11 @@
-use std::path::Path;
+use std::{future::Future, net::SocketAddr, path::Path};
 
+use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::{Channel, Endpoint, Error};
-use yarrp::connector::UdsConnector;
+use yarrp::{
+    accept_stream::TcpListenerStream,
+    connector::{TcpConnector, UdsConnector},
+};
 pub mod rustls_client;
 
 tonic::include_proto!("helloworld"); // The string specified here must match the proto package name
@@ -21,59 +25,105 @@ pub async fn connect_uds_channel<P: AsRef<Path>>(path: P) -> Result<Channel, Err
         .await
 }
 
+#[derive(Default)]
+pub struct HelloWorldService {}
+
+#[tonic::async_trait]
+impl greeter_server::Greeter for HelloWorldService {
+    async fn say_hello(
+        &self,
+        req: tonic::Request<HelloRequest>,
+    ) -> Result<tonic::Response<HelloReply>, tonic::Status> {
+        let name = req.into_inner().name;
+        Ok(tonic::Response::new(HelloReply {
+            message: format!("hello {}", name),
+        }))
+    }
+}
+
+async fn run_hello_server(
+    token: yarrp::CancellationToken,
+    incoming: yarrp::accept_stream::TcpListenerStream,
+) -> Result<(), tonic::transport::Error> {
+    let greeter = HelloWorldService::default();
+
+    // println!("GreeterServer listening on {}", addr);
+
+    tonic::transport::Server::builder()
+        .add_service(crate::greeter_server::GreeterServer::new(greeter))
+        .serve_with_incoming_shutdown(incoming, async move { token.cancelled().await })
+        .await?;
+    Ok(())
+}
+
+// returns the listener stream and its local addr from os.
+pub async fn create_listener_server() -> (tokio::net::TcpListener, std::net::SocketAddr) {
+    let addr: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let local_addr = listener.local_addr().unwrap();
+    // let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
+    (listener, local_addr)
+}
+
+pub async fn basic_test_case<I, IO, IE>(
+    client_channel: impl Future<Output = Channel>,
+    proxy_incoming: impl Future<Output = I> + Send + 'static,
+    sv_incoming: TcpListenerStream,
+    sv_addr: SocketAddr,
+) where
+    I: tokio_stream::Stream<Item = Result<IO, IE>> + Unpin + Send,
+    IO: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    IE: Into<yarrp::Error>,
+{
+    let sv_token = yarrp::CancellationToken::new();
+    let sv_token_cp = sv_token.clone();
+    let rt = tokio::runtime::Handle::current();
+    // Run tonic server
+    let sv_h = rt.spawn(async move {
+        crate::run_hello_server(sv_token_cp, sv_incoming)
+            .await
+            .unwrap();
+    });
+
+    // run proxy route to tonic
+    let sv_token_cp2 = sv_token.clone();
+    let proxy_h = rt.spawn(async move {
+        let conn = TcpConnector::new(sv_addr); // tonic addr
+        let service = yarrp::proxy_service::ProxyService::new(conn).await;
+        yarrp::serve_with_incoming(proxy_incoming.await, service, async move {
+            sv_token_cp2.cancelled().await
+        })
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // send request to proxy
+    let mut client = crate::greeter_client::GreeterClient::new(client_channel.await);
+    //let mut client = crate::greeter_client::GreeterClient::connect(dst)
+    let request = tonic::Request::new(HelloRequest {
+        name: "Tonic".into(),
+    });
+    let response = client.say_hello(request).await.unwrap();
+
+    println!("RESPONSE={:?}", response);
+
+    sv_token.cancel();
+    sv_h.await.unwrap();
+    proxy_h.await.unwrap();
+}
+
 #[cfg(test)]
-mod tests {
-    use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
+pub mod tests {
+    use std::{net::SocketAddr, sync::Arc};
 
     use hyper_util::rt::TokioIo;
-    use tokio::{
-        io::{AsyncRead, AsyncWrite},
-        net::TcpListener,
-    };
-    use tonic::transport::{Channel, Endpoint, Server};
-    use yarrp::{accept_stream::TcpListenerStream, connector::TcpConnector, CancellationToken};
+    use tokio::net::TcpListener;
+    use tonic::transport::Endpoint;
+    use yarrp::accept_stream::TcpListenerStream;
 
-    use crate::{HelloReply, HelloRequest};
-
-    #[derive(Default)]
-    pub struct HelloWorldService {}
-
-    #[tonic::async_trait]
-    impl super::greeter_server::Greeter for HelloWorldService {
-        async fn say_hello(
-            &self,
-            req: tonic::Request<HelloRequest>,
-        ) -> Result<tonic::Response<HelloReply>, tonic::Status> {
-            let name = req.into_inner().name;
-            Ok(tonic::Response::new(HelloReply {
-                message: format!("hello {}", name),
-            }))
-        }
-    }
-
-    async fn run_hello_server(
-        token: CancellationToken,
-        incoming: TcpListenerStream,
-    ) -> Result<(), tonic::transport::Error> {
-        let greeter = HelloWorldService::default();
-
-        // println!("GreeterServer listening on {}", addr);
-
-        Server::builder()
-            .add_service(crate::greeter_server::GreeterServer::new(greeter))
-            .serve_with_incoming_shutdown(incoming, async move { token.cancelled().await })
-            .await?;
-        Ok(())
-    }
-
-    // returns the listener stream and its local addr from os.
-    async fn create_listener_server() -> (TcpListener, SocketAddr) {
-        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        let local_addr = listener.local_addr().unwrap();
-        // let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        (listener, local_addr)
-    }
+    use crate::create_listener_server;
 
     #[tokio::test]
     async fn basic_tcp_proxy_test() {
@@ -94,7 +144,7 @@ mod tests {
 
         let (sv_l, sv_addr) = create_listener_server().await;
 
-        basic_test_case(
+        crate::basic_test_case(
             client_channel,
             proxy_incoming,
             TcpListenerStream::new(sv_l),
@@ -124,7 +174,7 @@ mod tests {
 
         let (sv_l, sv_addr) = create_listener_server().await;
 
-        basic_test_case(
+        crate::basic_test_case(
             client_channel,
             proxy_incoming,
             TcpListenerStream::new(sv_l),
@@ -165,59 +215,12 @@ mod tests {
         // tonic server
         let (sv_l, sv_addr) = create_listener_server().await;
 
-        basic_test_case(
+        crate::basic_test_case(
             client_channel,
             proxy_incoming,
             TcpListenerStream::new(sv_l),
             sv_addr,
         )
         .await;
-    }
-
-    async fn basic_test_case<I, IO, IE>(
-        client_channel: impl Future<Output = Channel>,
-        proxy_incoming: impl Future<Output = I> + Send + 'static,
-        sv_incoming: TcpListenerStream,
-        sv_addr: SocketAddr,
-    ) where
-        I: tokio_stream::Stream<Item = Result<IO, IE>> + Unpin + Send,
-        IO: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-        IE: Into<yarrp::Error>,
-    {
-        let sv_token = CancellationToken::new();
-        let sv_token_cp = sv_token.clone();
-        let rt = tokio::runtime::Handle::current();
-        // Run tonic server
-        let sv_h = rt.spawn(async move {
-            run_hello_server(sv_token_cp, sv_incoming).await.unwrap();
-        });
-
-        // run proxy route to tonic
-        let sv_token_cp2 = sv_token.clone();
-        let proxy_h = rt.spawn(async move {
-            let conn = TcpConnector::new(sv_addr); // tonic addr
-            let service = yarrp::proxy_service::ProxyService::new(conn).await;
-            yarrp::serve_with_incoming(proxy_incoming.await, service, async move {
-                sv_token_cp2.cancelled().await
-            })
-            .await
-            .unwrap();
-        });
-
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        // send request to proxy
-        let mut client = crate::greeter_client::GreeterClient::new(client_channel.await);
-        //let mut client = crate::greeter_client::GreeterClient::connect(dst)
-        let request = tonic::Request::new(HelloRequest {
-            name: "Tonic".into(),
-        });
-        let response = client.say_hello(request).await.unwrap();
-
-        println!("RESPONSE={:?}", response);
-
-        sv_token.cancel();
-        sv_h.await.unwrap();
-        proxy_h.await.unwrap();
     }
 }

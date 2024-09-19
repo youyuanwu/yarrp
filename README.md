@@ -7,6 +7,10 @@ WIP
 ```ps1
 # powershell7
 winget install Microsoft.PowerShell
+
+# vcpkg. Need to set VCPKG_ROOT var. See https://github.com/microsoft/vcpkg
+# openssl
+vcpkg install openssl:x64-windows-static-md
 ```
 
 ## Build

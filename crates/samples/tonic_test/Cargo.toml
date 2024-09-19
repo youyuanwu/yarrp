@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 yarrp.workspace = true
-yarrp-rustls.workspace = true
 tonic.workspace = true
 prost.workspace = true
 tokio.workspace = true
@@ -14,6 +13,8 @@ tokio-stream.workspace = true
 hyper-util.workspace = true
 tower.workspace = true
 hyperlocal-with-windows.workspace = true # remove file
+# rustls stuff
+yarrp-rustls.workspace = true
 tokio-rustls.workspace = true
 rustls-cng.workspace = true
 rustls-symcrypt.workspace = true
