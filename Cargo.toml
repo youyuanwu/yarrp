@@ -37,6 +37,7 @@ prost = "0.13"
 tonic-build = "0.12"
 prost-build = "0.13"
 http = "*"
+x509-parser = "*"
 # openssl stuff
 openssl = { version = "0.10" }
 tokio-openssl = { version = "0.6" }

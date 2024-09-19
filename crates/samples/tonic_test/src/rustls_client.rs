@@ -6,7 +6,11 @@ use tokio_rustls::{
     rustls::{ClientConfig, RootCertStore},
     TlsConnector,
 };
-use yarrp_rustls::cng::ClientCertResolver;
+use x509_parser::prelude::FromDer;
+use yarrp_rustls::{
+    accept_stream::{ClientAuthorizor, LambdaClientAuthorizor},
+    cng::ClientCertResolver,
+};
 
 // TODO: refactor into the yarrp-rustls crate
 /// Create client tls stream, uses the certs as both root and client cert.
@@ -34,4 +38,43 @@ pub async fn get_client_stream(
         .unwrap()
         .to_owned();
     connector.connect(domain, stream).await
+}
+
+/// make dummy error
+fn make_error() -> yarrp::Error {
+    yarrp::Error::from(std::io::Error::from(std::io::ErrorKind::NotFound))
+}
+
+/// Client authorizor that checks the subject name strict match. This is used on server acceptor
+pub fn get_common_name_authorizor(cn: String) -> Arc<dyn ClientAuthorizor> {
+    let client_authorize_cb = move |conn: &tokio_rustls::rustls::ServerConnection| {
+        let peer = conn.peer_certificates();
+        match peer {
+            Some(c) => {
+                let cc = c.first().ok_or(make_error())?;
+                let cert = x509_parser::certificate::X509Certificate::from_der(cc)
+                    .map_err(yarrp::Error::from)?;
+                let subjs = cert
+                    .1
+                    .subject
+                    .iter_common_name()
+                    .filter_map(|sn| sn.as_str().map_or(None, |s| Some(s.to_string())))
+                    .collect::<Vec<_>>();
+                // Get alternative names
+                // let alt = cert.1.subject_alternative_name().map_or(vec![],|s|{
+                //     s.map_or(vec![], |ss|{
+                //         ss.value.general_names.iter().map(|n| n.to_string()).collect::<Vec<_>>()
+                //     })
+                // });
+                // subjs.extend(alt);
+                println!("subjs : {:?}", subjs);
+                match subjs.contains(&cn) {
+                    true => Ok(()),
+                    false => Err(make_error()),
+                }
+            }
+            None => Err(make_error()),
+        }
+    };
+    Arc::new(LambdaClientAuthorizor::new(client_authorize_cb))
 }

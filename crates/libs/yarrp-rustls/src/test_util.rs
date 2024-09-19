@@ -45,7 +45,7 @@ pub fn find_certs_by_hash(hash: CertHash) -> Result<Vec<CertContext>, crate::Err
 
 fn get_test_cert_hash() -> String {
     let output = Command::new("pwsh.exe")
-      .args(["-Command", "Get-ChildItem Cert:\\CurrentUser\\My | Where-Object -Property FriendlyName -EQ -Value MsQuic-Test | Select-Object -ExpandProperty Thumbprint -First 1"]).
+      .args(["-Command", "Get-ChildItem Cert:\\CurrentUser\\My | Where-Object -Property FriendlyName -EQ -Value YARRP-Test | Select-Object -ExpandProperty Thumbprint -First 1"]).
       output().expect("Failed to execute command");
     assert!(output.status.success());
     let mut s = String::from_utf8(output.stdout).unwrap();
