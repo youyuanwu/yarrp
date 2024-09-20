@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use openssl::ssl::{SslAcceptor, SslConnector, SslFiletype, SslMethod};
+use openssl::ssl::{SslAcceptor, SslConnector, SslFiletype, SslMethod, SslVerifyMode};
 use tonic::transport::Channel;
 
 /// Load the certs from test dir and create acceptor
@@ -29,17 +29,16 @@ pub fn get_openssl_acceptor() -> SslAcceptor {
 
 pub async fn connect_openssl_channel<P: AsRef<Path>>(
     cert_path: P,
+    key_path: P,
     addr: SocketAddr,
-) -> Result<Channel, tonic::transport::Error> {
+) -> Result<Channel, yarrp::Error> {
     let p = cert_path.as_ref();
     let mut connector = SslConnector::builder(SslMethod::tls()).unwrap();
     connector.set_ca_file(p).unwrap();
+    connector.set_certificate_file(p, SslFiletype::PEM)?;
+    connector.set_private_key_file(key_path.as_ref(), SslFiletype::PEM)?;
+    connector.set_verify(SslVerifyMode::NONE); // TODO
     let connector = connector.build();
-    // let _ssl = connector
-    //     .configure()
-    //     .unwrap()
-    //     .into_ssl("localhost")
-    //     .unwrap();
 
     tonic::transport::Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(tower::service_fn(move |_| {
@@ -57,6 +56,7 @@ pub async fn connect_openssl_channel<P: AsRef<Path>>(
             }
         }))
         .await
+        .map_err(yarrp::Error::from)
 }
 
 fn get_root_dir() -> PathBuf {
