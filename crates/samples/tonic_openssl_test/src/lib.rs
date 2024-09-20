@@ -2,24 +2,15 @@ pub mod openssl_helper;
 
 #[cfg(test)]
 mod tests {
-    use openssl::ssl::SslVerifyMode;
+    use std::net::SocketAddr;
+
+    use openssl::ssl::{SslAcceptor, SslVerifyMode};
+    use tonic::transport::Channel;
     use yarrp::accept_stream::TcpListenerStream;
 
-    #[tokio::test]
-    async fn basic_openssl_proxy_test() {
-        // Create proxy server stream
-        let (proxy_l, proxy_addr) = tonic_test::create_listener_server().await;
+    use crate::openssl_helper::{get_test_cert_path, get_test_key_path, get_test_openss_connector};
 
-        let cert = crate::openssl_helper::get_test_cert_path();
-        let key = crate::openssl_helper::get_test_key_path();
-
-        let client_channel = async {
-            crate::openssl_helper::connect_openssl_channel(cert, key, proxy_addr)
-                .await
-                .unwrap()
-        };
-
-        // build openssl proxy server
+    fn get_test_openssl_acceptor() -> SslAcceptor {
         let mut acceptor =
             openssl::ssl::SslAcceptor::mozilla_intermediate(openssl::ssl::SslMethod::tls())
                 .unwrap();
@@ -65,19 +56,91 @@ mod tests {
             verify,
         );
 
-        let tls_acceptor = acceptor.build();
+        acceptor.build()
+    }
+
+    async fn get_test_client_channel(addr: SocketAddr) -> Channel {
+        let cert = crate::openssl_helper::get_test_cert_path();
+        let key = crate::openssl_helper::get_test_key_path();
+        crate::openssl_helper::connect_openssl_channel(cert, key, addr)
+            .await
+            .unwrap()
+    }
+
+    // #[tokio::test]
+    // async fn basic_tonic_openssl_test() {
+
+    //     let (proxy_l, proxy_addr) = tonic_test::create_listener_server().await;
+    //     let client_channel = async { get_test_client_channel(proxy_addr).await };
+
+    //     // tonic server with ssl
+    //     let (sv_l, sv_addr) = tonic_test::create_listener_server().await;
+    //     let sv_tls_acceptor = get_test_openssl_acceptor();
+    //     let sv_incomming =
+    //         yarrp_openssl::accept_stream::OpensslAcceptStream::new(sv_l, sv_tls_acceptor);
+
+    //     let token = yarrp::CancellationToken::new();
+
+    //     //tonic_test::run_hello_server()
+    // }
+
+    #[tokio::test]
+    async fn basic_openssl_proxy_test() {
+        // Create proxy server stream
+        let (proxy_l, proxy_addr) = tonic_test::create_listener_server().await;
+
+        let user_client_channel = async { get_test_client_channel(proxy_addr).await };
+
+        // build openssl proxy server
+        let tls_acceptor = get_test_openssl_acceptor();
 
         let proxy_incoming =
             async { yarrp_openssl::accept_stream::OpensslAcceptStream::new(proxy_l, tls_acceptor) };
 
         // tonic server
         let (sv_l, sv_addr) = tonic_test::create_listener_server().await;
+        let tonic_server_incoming = async { TcpListenerStream::new(sv_l) };
+        let proxy_client = yarrp::connector::TcpConnector::new(sv_addr);
 
         tonic_test::basic_test_case(
-            client_channel,
+            user_client_channel,
             proxy_incoming,
-            TcpListenerStream::new(sv_l),
-            sv_addr,
+            tonic_server_incoming,
+            proxy_client,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn basic_double_openssl_proxy_test() {
+        // Tests tonic server client runs on openssl and proxy server client runs on openssl too.
+        // Create proxy server stream
+        let (proxy_l, proxy_addr) = tonic_test::create_listener_server().await;
+
+        let user_client_channel = async { get_test_client_channel(proxy_addr).await };
+
+        // build openssl proxy server
+        let proxy_tls_acceptor = get_test_openssl_acceptor();
+        let proxy_incoming = async {
+            yarrp_openssl::accept_stream::OpensslAcceptStream::new(proxy_l, proxy_tls_acceptor)
+        };
+
+        // tonic server with ssl
+        let (sv_l, sv_addr) = tonic_test::create_listener_server().await;
+        let sv_tls_acceptor = get_test_openssl_acceptor();
+        let tonic_server_incoming =
+            async { yarrp_openssl::accept_stream::OpensslAcceptStream::new(sv_l, sv_tls_acceptor) };
+
+        // proxy client with ssl
+        let conn_inner =
+            get_test_openss_connector(get_test_cert_path(), get_test_key_path()).unwrap();
+        let proxy_client = yarrp_openssl::connector::OpensslConnector::new(conn_inner, sv_addr);
+
+        tonic_test::basic_test_case(
+            user_client_channel,
+            proxy_incoming,
+            tonic_server_incoming,
+            proxy_client,
         )
         .await;
     }

@@ -2172,9 +2172,14 @@ name = "yarrp-openssl"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "hyper",
+ "hyper-util",
  "openssl",
+ "pin-project-lite",
  "tokio",
  "tokio-openssl",
+ "tonic",
+ "tower",
  "yarrp",
 ]
 

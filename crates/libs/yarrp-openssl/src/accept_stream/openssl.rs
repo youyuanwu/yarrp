@@ -2,9 +2,9 @@ use std::{pin::Pin, task::Poll};
 
 use futures::{future::BoxFuture, Stream};
 use openssl::ssl::Ssl;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 
-type OpensslStream = tokio_openssl::SslStream<TcpStream>;
+use crate::OpensslStream;
 
 pub struct OpensslAcceptStream {
     inner: TcpListener,
@@ -56,7 +56,8 @@ impl Stream for OpensslAcceptStream {
                 .accept()
                 .await
                 .map_err(crate::Error::from)?;
-            Ok(stream)
+            // let s = OpensslStream(stream);
+            Ok(OpensslStream::new(stream))
         };
         self.fu = Some(Box::pin(fu));
         let out = self.fu.as_mut().unwrap().as_mut().poll(cx).map(Some);

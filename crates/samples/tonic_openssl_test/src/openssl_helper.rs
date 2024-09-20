@@ -27,18 +27,24 @@ pub fn get_openssl_acceptor() -> SslAcceptor {
     acceptor.build()
 }
 
+pub fn get_test_openss_connector<P: AsRef<Path>>(
+    cert_path: P,
+    key_path: P,
+) -> Result<SslConnector, yarrp::Error> {
+    let mut connector = SslConnector::builder(SslMethod::tls()).unwrap();
+    connector.set_ca_file(cert_path.as_ref()).unwrap();
+    connector.set_certificate_file(cert_path.as_ref(), SslFiletype::PEM)?;
+    connector.set_private_key_file(key_path.as_ref(), SslFiletype::PEM)?;
+    connector.set_verify(SslVerifyMode::NONE); // TODO
+    Ok(connector.build())
+}
+
 pub async fn connect_openssl_channel<P: AsRef<Path>>(
     cert_path: P,
     key_path: P,
     addr: SocketAddr,
 ) -> Result<Channel, yarrp::Error> {
-    let p = cert_path.as_ref();
-    let mut connector = SslConnector::builder(SslMethod::tls()).unwrap();
-    connector.set_ca_file(p).unwrap();
-    connector.set_certificate_file(p, SslFiletype::PEM)?;
-    connector.set_private_key_file(key_path.as_ref(), SslFiletype::PEM)?;
-    connector.set_verify(SslVerifyMode::NONE); // TODO
-    let connector = connector.build();
+    let connector = get_test_openss_connector(cert_path, key_path)?;
 
     tonic::transport::Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(tower::service_fn(move |_| {

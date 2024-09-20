@@ -1,11 +1,8 @@
-use std::{future::Future, net::SocketAddr, path::Path};
+use std::{future::Future, path::Path};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::{Channel, Endpoint, Error};
-use yarrp::{
-    accept_stream::TcpListenerStream,
-    connector::{TcpConnector, UdsConnector},
-};
+use yarrp::connector::UdsConnector;
 pub mod rustls_client;
 
 tonic::include_proto!("helloworld"); // The string specified here must match the proto package name
@@ -41,10 +38,15 @@ impl greeter_server::Greeter for HelloWorldService {
     }
 }
 
-async fn run_hello_server(
+pub async fn run_hello_server<I, IO, IE>(
     token: yarrp::CancellationToken,
-    incoming: yarrp::accept_stream::TcpListenerStream,
-) -> Result<(), tonic::transport::Error> {
+    incoming: I,
+) -> Result<(), tonic::transport::Error>
+where
+    I: tokio_stream::Stream<Item = Result<IO, IE>> + Unpin + Send,
+    IO: AsyncRead + AsyncWrite + tonic::transport::server::Connected + Unpin + Send + 'static,
+    IE: Into<yarrp::Error>,
+{
     let greeter = HelloWorldService::default();
 
     // println!("GreeterServer listening on {}", addr);
@@ -65,31 +67,33 @@ pub async fn create_listener_server() -> (tokio::net::TcpListener, std::net::Soc
     (listener, local_addr)
 }
 
-pub async fn basic_test_case<I, IO, IE>(
+pub async fn basic_test_case<I, IO, IE, I2, IO2, IE2>(
     client_channel: impl Future<Output = Channel>,
     proxy_incoming: impl Future<Output = I> + Send + 'static,
-    sv_incoming: TcpListenerStream,
-    sv_addr: SocketAddr,
+    sv_incoming: impl Future<Output = I2> + Send + 'static,
+    proxy_client_conn: impl hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 ) where
     I: tokio_stream::Stream<Item = Result<IO, IE>> + Unpin + Send,
     IO: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     IE: Into<yarrp::Error>,
+    I2: tokio_stream::Stream<Item = Result<IO2, IE2>> + Unpin + Send,
+    IO2: AsyncRead + AsyncWrite + tonic::transport::server::Connected + Unpin + Send + 'static,
+    IE2: Into<yarrp::Error> + Send,
 {
     let sv_token = yarrp::CancellationToken::new();
     let sv_token_cp = sv_token.clone();
     let rt = tokio::runtime::Handle::current();
     // Run tonic server
     let sv_h = rt.spawn(async move {
-        crate::run_hello_server(sv_token_cp, sv_incoming)
-            .await
-            .unwrap();
+        let ic = sv_incoming.await;
+        crate::run_hello_server(sv_token_cp, ic).await.unwrap();
     });
 
     // run proxy route to tonic
     let sv_token_cp2 = sv_token.clone();
     let proxy_h = rt.spawn(async move {
-        let conn = TcpConnector::new(sv_addr); // tonic addr
-        let service = yarrp::proxy_service::ProxyService::new(conn).await;
+        // let conn = TcpConnector::new(sv_addr); // tonic addr
+        let service = yarrp::proxy_service::ProxyService::new(proxy_client_conn).await;
         yarrp::serve_with_incoming(proxy_incoming.await, service, async move {
             sv_token_cp2.cancelled().await
         })
@@ -147,8 +151,8 @@ pub mod tests {
         crate::basic_test_case(
             client_channel,
             proxy_incoming,
-            TcpListenerStream::new(sv_l),
-            sv_addr,
+            async { TcpListenerStream::new(sv_l) },
+            yarrp::connector::TcpConnector::new(sv_addr),
         )
         .await;
     }
@@ -177,8 +181,8 @@ pub mod tests {
         crate::basic_test_case(
             client_channel,
             proxy_incoming,
-            TcpListenerStream::new(sv_l),
-            sv_addr,
+            async { TcpListenerStream::new(sv_l) },
+            yarrp::connector::TcpConnector::new(sv_addr),
         )
         .await;
     }
@@ -227,8 +231,8 @@ pub mod tests {
         crate::basic_test_case(
             client_channel,
             proxy_incoming,
-            TcpListenerStream::new(sv_l),
-            sv_addr,
+            async { TcpListenerStream::new(sv_l) },
+            yarrp::connector::TcpConnector::new(sv_addr),
         )
         .await;
     }

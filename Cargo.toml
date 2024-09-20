@@ -41,6 +41,7 @@ x509-parser = "*"
 # openssl stuff
 openssl = { version = "0.10" }
 tokio-openssl = { version = "0.6" }
+pin-project-lite = "0.2"
 # libs in this repo
 yarrp = { path = "./crates/libs/yarrp" }
 yarrp-rustls = { path = "./crates/libs/yarrp-rustls" }
