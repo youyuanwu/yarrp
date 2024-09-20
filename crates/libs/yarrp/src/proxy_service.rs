@@ -17,9 +17,9 @@ impl<C> ProxyService<C>
 where
     C: Connect + Clone + Send + Sync + 'static,
 {
-    pub async fn new(conn: C) -> Self {
+    pub fn new(conn: C) -> Self {
         Self {
-            c: make_client(conn).await,
+            c: make_client(conn),
         }
     }
 }
@@ -40,7 +40,7 @@ where
 }
 
 /// Makes the http client that poxy request to.
-async fn make_client<R: hyper::body::Body + Send, C: Connect + Clone>(conn: C) -> Client<C, R>
+fn make_client<R: hyper::body::Body + Send, C: Connect + Clone>(conn: C) -> Client<C, R>
 where
     <R as hyper::body::Body>::Data: Send,
 {

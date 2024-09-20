@@ -73,14 +73,3 @@ impl AsyncWrite for OpensslStream {
         self.project().inner.poll_shutdown(cx)
     }
 }
-
-// TODO: impl traits
-
-// expose inner tratis of the ssl stream
-// impl std::ops::Deref for OpensslStream {
-//     type Target = tokio_openssl::SslStream<TcpStream>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }

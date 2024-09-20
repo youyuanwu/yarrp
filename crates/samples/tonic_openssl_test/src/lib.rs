@@ -67,22 +67,18 @@ mod tests {
             .unwrap()
     }
 
-    // #[tokio::test]
-    // async fn basic_tonic_openssl_test() {
+    #[tokio::test]
+    async fn basic_tonic_openssl_test() {
+        // tonic server with ssl
+        let (sv_l, sv_addr) = tonic_test::create_listener_server().await;
+        let client_channel = async { get_test_client_channel(sv_addr).await };
 
-    //     let (proxy_l, proxy_addr) = tonic_test::create_listener_server().await;
-    //     let client_channel = async { get_test_client_channel(proxy_addr).await };
+        let sv_tls_acceptor = get_test_openssl_acceptor();
+        let sv_incoming =
+            async { yarrp_openssl::accept_stream::OpensslAcceptStream::new(sv_l, sv_tls_acceptor) };
 
-    //     // tonic server with ssl
-    //     let (sv_l, sv_addr) = tonic_test::create_listener_server().await;
-    //     let sv_tls_acceptor = get_test_openssl_acceptor();
-    //     let sv_incomming =
-    //         yarrp_openssl::accept_stream::OpensslAcceptStream::new(sv_l, sv_tls_acceptor);
-
-    //     let token = yarrp::CancellationToken::new();
-
-    //     //tonic_test::run_hello_server()
-    // }
+        tonic_test::basic_tonic_test_case(client_channel, sv_incoming).await;
+    }
 
     #[tokio::test]
     async fn basic_openssl_proxy_test() {
@@ -102,7 +98,7 @@ mod tests {
         let tonic_server_incoming = async { TcpListenerStream::new(sv_l) };
         let proxy_client = yarrp::connector::TcpConnector::new(sv_addr);
 
-        tonic_test::basic_test_case(
+        tonic_test::basic_proxy_test_case(
             user_client_channel,
             proxy_incoming,
             tonic_server_incoming,
@@ -136,7 +132,7 @@ mod tests {
             get_test_openss_connector(get_test_cert_path(), get_test_key_path()).unwrap();
         let proxy_client = yarrp_openssl::connector::OpensslConnector::new(conn_inner, sv_addr);
 
-        tonic_test::basic_test_case(
+        tonic_test::basic_proxy_test_case(
             user_client_channel,
             proxy_incoming,
             tonic_server_incoming,
