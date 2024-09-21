@@ -31,12 +31,28 @@ impl Stream for OpensslAcceptStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         // if has pending slot poll it.
         if let Some(f) = self.fu.as_mut() {
-            let pl = f.as_mut().poll(cx).map(Some);
+            let pl = f.as_mut().poll(cx);
             // clean this and next time tcp accept is called.
             if pl.is_ready() {
                 self.fu.take();
             }
-            return pl;
+            return match pl {
+                Poll::Ready(r) => {
+                    // clear an prepare next
+                    self.fu.take();
+                    // tonic will exit if the accept failed. So we discard it and poll next connection
+                    match r {
+                        Ok(_) => Poll::Ready(Some(r)),
+                        Err(e) => {
+                            println!("ssl failed and skip: {}", e);
+                            // ask executor to try again.
+                            cx.waker().wake_by_ref();
+                            Poll::Pending
+                        }
+                    }
+                }
+                Poll::Pending => Poll::Pending,
+            };
         }
 
         // poll tcp and construct next f
@@ -60,11 +76,23 @@ impl Stream for OpensslAcceptStream {
             Ok(OpensslStream::new(stream))
         };
         self.fu = Some(Box::pin(fu));
-        let out = self.fu.as_mut().unwrap().as_mut().poll(cx).map(Some);
-        if matches!(out, Poll::Ready(_)) {
-            // clear an prepare next
-            self.fu.take();
+        let out = self.fu.as_mut().unwrap().as_mut().poll(cx);
+        match out {
+            Poll::Ready(r) => {
+                // clear an prepare next
+                self.fu.take();
+                // tonic will exit if the accept failed. So we discard it and poll next connection
+                match r {
+                    Ok(_) => Poll::Ready(Some(r)),
+                    Err(e) => {
+                        println!("ssl failed and skip: {}", e);
+                        // ask executor to try again.
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                }
+            }
+            Poll::Pending => Poll::Pending,
         }
-        out
     }
 }

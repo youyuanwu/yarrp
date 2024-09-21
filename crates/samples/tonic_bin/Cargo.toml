@@ -1,0 +1,11 @@
+[package]
+name = "tonic_bin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tonic_openssl_test.workspace = true
+tonic_test.workspace = true
+yarrp-openssl.workspace = true
+yarrp.workspace = true
+tokio.workspace = true

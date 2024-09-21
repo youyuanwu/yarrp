@@ -1817,6 +1817,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic_bin"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tonic_openssl_test",
+ "tonic_test",
+ "yarrp",
+ "yarrp-openssl",
+]
+
+[[package]]
 name = "tonic_openssl_test"
 version = "0.1.0"
 dependencies = [

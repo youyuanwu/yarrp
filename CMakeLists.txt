@@ -67,3 +67,18 @@ if(TEST_CERT_HASH STREQUAL "")
 endif()
 message(STATUS "Using TEST_CERT_HASH ${TEST_CERT_HASH}")
 endif(WIN32)
+
+# download grpc curl for testing
+# https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_windows_x86_64.zip
+message(STATUS "fetching grpcurl")
+FetchContent_Declare(
+  grpcurl
+  DOWNLOAD_NO_EXTRACT FALSE
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  URL https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_windows_x86_64.zip
+  # URL_HASH SHA256=DAD1EFED75CB772A0C9E5D4646006BF87E1E051191473A2A30C9DB66EE223CFD
+)
+FetchContent_GetProperties(grpcurl)
+if(NOT grpcurl_POPULATED)
+  FetchContent_Populate(grpcurl)
+endif()
