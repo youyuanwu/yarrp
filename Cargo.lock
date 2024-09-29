@@ -1336,7 +1336,7 @@ dependencies = [
 [[package]]
 name = "rustls"
 version = "0.23.13"
-source = "git+https://github.com/rustls/rustls.git#bfb766554929c92fd90c59ab1ffa30523b8ddb83"
+source = "git+https://github.com/rustls/rustls.git#211eabfa61d8af7643300e1e81dc33ce598e15f8"
 dependencies = [
  "once_cell",
  "ring",
@@ -1410,6 +1410,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "schannel"
+version = "0.1.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9aaafd5a2b6e3d657ff009d82fbd630b6bd54dd4eb06f21693925cdf80f9b8b"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1724,6 +1733,14 @@ checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
 dependencies = [
  "rustls",
  "rustls-pki-types",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-schannel"
+version = "0.1.0"
+dependencies = [
+ "schannel",
  "tokio",
 ]
 
