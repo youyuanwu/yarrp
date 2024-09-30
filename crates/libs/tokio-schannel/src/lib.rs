@@ -37,6 +37,17 @@ impl<S> StreamWrapper<S> {
         let context = &mut *(self.context as *mut Context<'_>);
         (stream, context)
     }
+
+    // // internal helper to set context and execute sync function.
+    // fn with_context<F, R>(&mut self, ctx: &mut Context<'_>, f: F) -> R
+    // where
+    //     F: FnOnce(&mut Self) -> R,
+    // {
+    //     self.context = ctx as *mut _ as usize;
+    //     let r = f(self);
+    //     self.context = 0;
+    //     r
+    // }
 }
 
 impl<S> Read for StreamWrapper<S>
@@ -158,25 +169,125 @@ pub struct TlsAcceptor {
 }
 
 impl TlsAcceptor {
+    pub fn new(
+        inner: schannel::tls_stream::Builder,
+        cred: schannel::schannel_cred::SchannelCred,
+    ) -> Self {
+        Self { inner, cred }
+    }
+
+    // This needs to be poll
     pub async fn accept<IO>(&mut self, stream: IO) -> io::Result<SslStream<IO>>
     where
         IO: AsyncRead + AsyncWrite + Unpin,
     {
         let s_wrap = StreamWrapper { stream, context: 0 };
         let cred = self.cred.clone();
-        match self.inner.accept(cred, s_wrap) {
-            Ok(s) => Ok(SslStream(s)),
+        // TODO: This does not work due to cx not set.
+        conv_schannel_err(self.inner.accept(cred, s_wrap)).await
+
+        // cannot impl this api from poll. TODO:
+
+        // match future::poll_fn(|cx| { self.as_mut().poll_accept(cx, stream)}).await {
+        //     Ok(s) => Ok(s),
+        //     Err(e) => {
+        //         let mid = e?;
+        //         mid.await
+        //     },
+        // }
+        // todo!()
+    }
+
+    /// TODO: This has problem convert to async
+    pub fn poll_accept<IO>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context,
+        stream: IO,
+    ) -> Poll<Result<SslStream<IO>, io::Result<MidHandShake<IO>>>>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
+        let mut s_wrap = StreamWrapper { stream, context: 0 };
+        s_wrap.context = cx as *mut _ as usize;
+        let cred = self.cred.clone();
+        let res = self.inner.accept(cred, s_wrap);
+
+        match res {
+            Ok(mut s) => {
+                s.get_mut().context = 0;
+                Poll::Ready(Ok(SslStream(s)))
+            }
             Err(e) => match e {
-                schannel::tls_stream::HandshakeError::Failure(e) => Err(e),
-                schannel::tls_stream::HandshakeError::Interrupted(mid_handshake_tls_stream) => {
-                    MidHandShake(Some(mid_handshake_tls_stream)).await
+                schannel::tls_stream::HandshakeError::Failure(error) => {
+                    Poll::Ready(Err(Err(error)))
+                }
+                schannel::tls_stream::HandshakeError::Interrupted(mut mid_handshake_tls_stream) => {
+                    mid_handshake_tls_stream.get_mut().context = 0;
+                    Poll::Ready(Err(Ok(MidHandShake(Some(mid_handshake_tls_stream)))))
                 }
             },
         }
-
-        //self.with_context(cx, |s| cvt_ossl(s.accept()))
     }
 }
+
+// connector
+pub struct TlsConnector {
+    inner: schannel::tls_stream::Builder,
+    cred: schannel::schannel_cred::SchannelCred,
+}
+
+impl TlsConnector {
+    pub fn new(
+        inner: schannel::tls_stream::Builder,
+        cred: schannel::schannel_cred::SchannelCred,
+    ) -> Self {
+        Self { inner, cred }
+    }
+
+    pub async fn connect<IO>(&mut self, stream: IO) -> io::Result<SslStream<IO>>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
+        let s_wrap = StreamWrapper { stream, context: 0 };
+        let cred = self.cred.clone();
+        conv_schannel_err(self.inner.connect(cred, s_wrap)).await
+    }
+}
+
+// handle mid handshake error for accept or connect
+async fn conv_schannel_err<S>(
+    err: Result<
+        schannel::tls_stream::TlsStream<StreamWrapper<S>>,
+        schannel::tls_stream::HandshakeError<StreamWrapper<S>>,
+    >,
+) -> io::Result<SslStream<S>>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    match err {
+        Ok(s) => Ok(SslStream(s)),
+        Err(e) => match e {
+            schannel::tls_stream::HandshakeError::Failure(e) => Err(e),
+            schannel::tls_stream::HandshakeError::Interrupted(mid_handshake_tls_stream) => {
+                MidHandShake(Some(mid_handshake_tls_stream)).await
+            }
+        },
+    }
+}
+
+pub enum StartHandShake<S> {
+    Mid(MidHandShake<S>),
+    Done(SslStream<S>),
+}
+
+// pub struct StartHandShakeFu<S> {
+//     f: dyn FnOnce() -> StartHandShake<S>,
+// }
+
+// impl<S> Future for StartHandShakeFu<S>
+// {
+//     type Output = StartHandShake<S>;
+// }
 
 pub struct MidHandShake<S>(Option<MidHandshakeTlsStream<StreamWrapper<S>>>);
 
@@ -193,31 +304,17 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Future for MidHandShake<S> {
                 st.get_mut().context = 0;
                 Poll::Ready(Ok(SslStream(st)))
             }
-            Err(e) => {
-                match e {
-                    schannel::tls_stream::HandshakeError::Failure(error) => Poll::Ready(Err(error)),
-                    schannel::tls_stream::HandshakeError::Interrupted(mid_handshake_tls_stream) => {
-                        //s.get_mut().context = 0;
-                        mut_self.0 = Some(mid_handshake_tls_stream);
-                        Poll::Pending
-                    }
+            Err(e) => match e {
+                schannel::tls_stream::HandshakeError::Failure(error) => Poll::Ready(Err(error)),
+                schannel::tls_stream::HandshakeError::Interrupted(mut mid_handshake_tls_stream) => {
+                    mid_handshake_tls_stream.get_mut().context = 0;
+                    mut_self.0 = Some(mid_handshake_tls_stream);
+                    Poll::Pending
                 }
-            }
+            },
         }
     }
 }
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod tests;

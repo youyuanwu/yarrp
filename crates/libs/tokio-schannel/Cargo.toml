@@ -5,4 +5,7 @@ edition = "2021"
 
 [dependencies]
 schannel = "0.1"
-tokio.workspace = true
+tokio = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
