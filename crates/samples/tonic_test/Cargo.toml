@@ -19,11 +19,4 @@ yarrp-rustls.workspace = true
 tokio-rustls.workspace = true
 rustls-cng.workspace = true
 rustls-symcrypt.workspace = true
-
-
-[build-dependencies]
-tonic-build.workspace = true
-# prost-build.workspace = true
-
-[package.metadata.rust-analyzer]
-cargo.loadOutDirsFromCheck = true
+tonic_shared.workspace = true

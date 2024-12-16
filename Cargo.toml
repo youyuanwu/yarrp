@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "crates/libs/hyper-h3",
   "crates/libs/yarrp",
   "crates/libs/yarrp-openssl",
-  "crates/libs/yarrp-rustls", "crates/samples/tonic_bin",
-  "crates/samples/tonic_openssl_test",
+  "crates/libs/yarrp-rustls", "crates/samples/tonic_bin", "crates/samples/tonic_h3_test",
+  "crates/samples/tonic_openssl_test", "crates/samples/tonic_shared",
   "crates/samples/tonic_test",
 ]
 
@@ -46,10 +46,15 @@ pin-project-lite = "0.2"
 yarrp = { path = "./crates/libs/yarrp" }
 yarrp-rustls = { path = "./crates/libs/yarrp-rustls" }
 yarrp-openssl = { path = "./crates/libs/yarrp-openssl" }
+hyper-h3 = { path = "./crates/libs/hyper-h3" }
 # test crates
 tonic_test = { path = "./crates/samples/tonic_test" }
 tonic_openssl_test = {path = "./crates/samples/tonic_openssl_test"}
+tonic_shared = {path = "./crates/samples/tonic_shared"}
+
+tracing = { version = "0.1", features = ["log"] }
 
 [patch.crates-io]
 # cng uses this dep without version so we use it same for it to compile
 rustls = { git = "https://github.com/rustls/rustls.git" } # same as cng
+h3 = { git = "https://github.com/youyuanwu/h3.git", rev = "659d0fc1da7c132726d824331a54fe8489b40715"}

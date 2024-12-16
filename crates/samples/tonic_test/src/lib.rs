@@ -2,10 +2,9 @@ use std::{future::Future, path::Path};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::{Channel, Endpoint, Error};
+use tonic_shared::{greeter_client, HelloRequest};
 use yarrp::connector::UdsConnector;
 pub mod rustls_client;
-
-tonic::include_proto!("helloworld"); // The string specified here must match the proto package name
 
 pub async fn connect_uds_channel<P: AsRef<Path>>(path: P) -> Result<Channel, Error> {
     let p = path.as_ref();
@@ -22,22 +21,6 @@ pub async fn connect_uds_channel<P: AsRef<Path>>(path: P) -> Result<Channel, Err
         .await
 }
 
-#[derive(Default)]
-pub struct HelloWorldService {}
-
-#[tonic::async_trait]
-impl greeter_server::Greeter for HelloWorldService {
-    async fn say_hello(
-        &self,
-        req: tonic::Request<HelloRequest>,
-    ) -> Result<tonic::Response<HelloReply>, tonic::Status> {
-        let name = req.into_inner().name;
-        Ok(tonic::Response::new(HelloReply {
-            message: format!("hello {}", name),
-        }))
-    }
-}
-
 pub async fn run_hello_server<I, IO, IE>(
     token: yarrp::CancellationToken,
     incoming: I,
@@ -47,12 +30,12 @@ where
     IO: AsyncRead + AsyncWrite + tonic::transport::server::Connected + Unpin + Send + 'static,
     IE: Into<yarrp::Error>,
 {
-    let greeter = HelloWorldService::default();
+    let greeter = tonic_shared::HelloWorldService::default();
 
     // println!("GreeterServer listening on {}", addr);
 
     tonic::transport::Server::builder()
-        .add_service(crate::greeter_server::GreeterServer::new(greeter))
+        .add_service(tonic_shared::greeter_server::GreeterServer::new(greeter))
         .serve_with_incoming_shutdown(incoming, async move { token.cancelled().await })
         .await?;
     Ok(())
@@ -69,7 +52,7 @@ pub async fn create_listener_server() -> (tokio::net::TcpListener, std::net::Soc
 
 async fn basic_test_tonic_client_inoke(ch: Channel) {
     // send request to proxy
-    let mut client = crate::greeter_client::GreeterClient::new(ch);
+    let mut client = greeter_client::GreeterClient::new(ch);
     //let mut client = crate::greeter_client::GreeterClient::connect(dst)
     let request = tonic::Request::new(HelloRequest {
         name: "Tonic".into(),
@@ -281,7 +264,7 @@ pub mod tests {
                         // Connect to tls proxy
                         crate::rustls_client::get_client_stream(certs_cp, proxy_addr_cp)
                             .await
-                            .map(|s| TokioIo::new(s))
+                            .map(TokioIo::new)
                     }
                 }))
                 .await
