@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = [ "crates/libs/hyper-h3",
+members = [
   "crates/libs/yarrp",
   "crates/libs/yarrp-openssl",
-  "crates/libs/yarrp-rustls", "crates/samples/tonic_bin", "crates/samples/tonic_h3_test",
+  "crates/libs/yarrp-rustls", "crates/samples/tonic_bin",
   "crates/samples/tonic_openssl_test", "crates/samples/tonic_shared",
   "crates/samples/tonic_test",
 ]
@@ -30,7 +30,6 @@ tokio-util = "*"
 cfg-if = "1.0"
 trait-variant = "0.1"
 tokio-stream = { version = "0.1", features = ["net"] }
-# async-stream = { version = "*" }
 futures = "*"
 tonic = "0.12"
 prost = "0.13"
@@ -46,7 +45,6 @@ pin-project-lite = "0.2"
 yarrp = { path = "./crates/libs/yarrp" }
 yarrp-rustls = { path = "./crates/libs/yarrp-rustls" }
 yarrp-openssl = { path = "./crates/libs/yarrp-openssl" }
-hyper-h3 = { path = "./crates/libs/hyper-h3" }
 # test crates
 tonic_test = { path = "./crates/samples/tonic_test" }
 tonic_openssl_test = {path = "./crates/samples/tonic_openssl_test"}
@@ -57,4 +55,3 @@ tracing = { version = "0.1", features = ["log"] }
 [patch.crates-io]
 # cng uses this dep without version so we use it same for it to compile
 rustls = { git = "https://github.com/rustls/rustls.git" } # same as cng
-h3 = { git = "https://github.com/youyuanwu/h3.git", rev = "659d0fc1da7c132726d824331a54fe8489b40715"}
