@@ -1336,7 +1336,8 @@ dependencies = [
 [[package]]
 name = "rustls"
 version = "0.23.20"
-source = "git+https://github.com/rustls/rustls.git#7ef5c49f762659a103f028f06aaeac4c6b60d645"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5065c3f250cbd332cd894be57c40fa52387247659b14a2d6041d121547903b1b"
 dependencies = [
  "once_cell",
  "ring",
@@ -1348,8 +1349,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-cng"
-version = "0.5.0"
-source = "git+https://github.com/rustls/rustls-cng.git#57735717ae4529192e83e7b073441bf0387b9e3f"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c742cb7d8e43daae2dd9ca4b1da442b4500a461ce1c84249e6ac99b4bc12562e"
 dependencies = [
  "rustls",
  "sha2",
