@@ -83,7 +83,7 @@ fn create_key(contexts: Vec<CertContext>) -> Arc<CertifiedKey> {
         .into_iter()
         .find_map(|ctx| {
             // find the first cert
-            let key = ctx.acquire_key().ok()?;
+            let key = ctx.acquire_key(false).ok()?;
             CngSigningKey::new(key).ok().map(|key| (ctx, key))
         })
         .unwrap();
