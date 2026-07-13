@@ -1,7 +1,16 @@
 # YARRP
-Yet another Rust Reverse Proxy
+![build](https://github.com/youyuanwu/yarrp/actions/workflows/build.yaml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://raw.githubusercontent.com/youyuanwu/yarrp/main/LICENSE)
 
-WIP
+Yet Another Rust Reverse Proxy.
+
+YARRP is a reverse proxy built on top of [hyper](https://github.com/hyperium/hyper) and
+[tonic](https://github.com/hyperium/tonic), with pluggable TLS backends:
+
+* [openssl](https://github.com/sfackler/rust-openssl) via the `yarrp-openssl` crate
+* [rustls](https://github.com/rustls/rustls) (with Windows CNG / SymCrypt support) via the `yarrp-rustls` crate
+
+> WIP: This project is experimental and primarily targets Windows.
 
 ## Dependency
 ```ps1
@@ -25,3 +34,8 @@ cargo build --all
 # run tests
 cargo test
 ```
+
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for more details.
+
+## License
+This project is licensed under the MIT license.
