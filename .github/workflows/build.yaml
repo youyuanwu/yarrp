@@ -1,14 +1,35 @@
 name: build
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+env:
+  RUST_MSRV: "1.90.0"
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      rust-msrv: ${{ env.RUST_MSRV }}
+      rust-version: ${{ steps.parse.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: parse
+        run: |
+          version=$(grep 'channel' rust-toolchain.toml | sed 's/.*"\(.*\)"/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         BUILD_TYPE: ["Debug"] # "Release"
         os: [ windows-latest ] # , ubuntu-latest
+        rust: [ '${{ needs.setup.outputs.rust-msrv }}', '${{ needs.setup.outputs.rust-version }}' ]
     steps:
     - uses: actions/checkout@v4
 
@@ -24,29 +45,29 @@ jobs:
         echo "OPENSSL_LIB_DIR=C:/Program Files/OpenSSL/lib/VC/x64/MDd" >> $env:GITHUB_ENV
       shell: pwsh
 
-    - name: Install rust stable
+    - name: Install rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: 1.90.0
+        toolchain: ${{ matrix.rust }}
         components: rustfmt, clippy
-    
+
     - uses: taiki-e/install-action@protoc
 
     - name: run cmake
-      run: > 
+      run: >
         cmake . -DCMAKE_BUILD_TYPE=${{ matrix.BUILD_TYPE }} -B build
 
     - name: run build
       run: cmake --build build --config ${{ matrix.BUILD_TYPE }}
 
     - name: Run cargo check
-      run: cargo check
+      run: cargo +${{ matrix.rust }} check
 
     - name: Run cargo fmt
-      run: cargo fmt --all -- --check
-    
+      run: cargo +${{ matrix.rust }} fmt --all -- --check
+
     - name: Run cargo clippy
-      run: cargo clippy --all-targets -- -D warnings
+      run: cargo +${{ matrix.rust }} clippy --all-targets -- -D warnings
 
     - name: run all rust unittests
-      run: cargo test --all-targets
+      run: cargo +${{ matrix.rust }} test --all-targets

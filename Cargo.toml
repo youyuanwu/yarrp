@@ -17,7 +17,7 @@ hex = "0.4"
 http = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client"] }
-hyper-util = { version = "*", default-features = false, features = ["server-auto","tokio", "client-legacy",] }
+hyper-util = { version = "0.1", default-features = false, features = ["server-auto","tokio", "client-legacy",] }
 hyperlocal-with-windows = "0.9"
 openssl = { version = "0.10" }
 pin-project-lite = "0.2"
