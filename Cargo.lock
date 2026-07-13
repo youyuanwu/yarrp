@@ -1084,12 +1084,13 @@ dependencies = [
 
 [[package]]
 name = "rustls-cng"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae77a1973becea1dce2a2187b69a66252a7c1a2345c191bc3501e9497f03d7ea"
+checksum = "807615e3031830a0b598a65be815a8a195a4a8eff5e037959f134e449998e13d"
 dependencies = [
+ "bitflags",
  "rustls",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1676,15 +1677,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
 ]
