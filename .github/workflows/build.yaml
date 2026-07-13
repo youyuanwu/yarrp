@@ -15,7 +15,7 @@ jobs:
       rust-msrv: ${{ env.RUST_MSRV }}
       rust-version: ${{ steps.parse.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: parse
         run: |
           version=$(grep 'channel' rust-toolchain.toml | sed 's/.*"\(.*\)"/\1/')
@@ -31,7 +31,7 @@ jobs:
         os: [ windows-latest ] # , ubuntu-latest
         rust: [ '${{ needs.setup.outputs.rust-msrv }}', '${{ needs.setup.outputs.rust-version }}' ]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: set env symcrypt
       shell: pwsh
