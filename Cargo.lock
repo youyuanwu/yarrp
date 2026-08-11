@@ -1084,9 +1084,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-cng"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "807615e3031830a0b598a65be815a8a195a4a8eff5e037959f134e449998e13d"
+checksum = "3eeed9c3e96253f36d1cfdd593388ecca775b532b6ff0c649a3010f6af60fe70"
 dependencies = [
  "bitflags",
  "rustls",
